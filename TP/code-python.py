@@ -1,43 +1,28 @@
-# ==============================
-# 1. Chargement et préparation des données
-# ==============================
+# 0. Importation des bibliothèques
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-
-data = pd.read_csv(
-    "C:/Users/zitaoumar0202/Downloads/california_housing.csv")
-
+# 1. Chargement et préparation des données
+data = pd.read_csv("C:/Users/zitaoumar0202/Downloads/california_housing.csv")
 y_raw = data["MedHouseVal"].values
-y = np.where(y_raw > np.median(y_raw), 1, -1)
-
+y = np.where(y_raw > np.median(y_raw), 1, -1)  # classification binaire
 X = data.drop(columns=["MedHouseVal"]).values
 X = (X - X.mean(axis=0)) / X.std(axis=0)
-
 n, d = X.shape
-print(n, d)
-
-# ==============================
+print("n =", n, ", d =", d)
 # 2. Fonctions de base
-# ==============================
 def logistic_loss(w, X, y):
     z = y * (X @ w)
     return np.mean(np.log(1 + np.exp(-z)))
-
 def logistic_gradient(w, X, y):
     z = y * (X @ w)
     sigma = 1 / (1 + np.exp(z))
     return -(X.T @ (y * sigma)) / X.shape[0]
-
 def logistic_ridge_loss(w, X, y, lam):
     return logistic_loss(w, X, y) + 0.5 * lam * np.linalg.norm(w)**2
-
 def logistic_ridge_gradient(w, X, y, lam):
     return logistic_gradient(w, X, y) + lam * w
-
-# ==============================
-# 3. Algorithmes d’optimisation
-# ==============================
+# 3. Algorithmes d’optimisation différentiables
 def gradient_descent(X, y, lam, alpha, n_iter):
     w = np.zeros(X.shape[1])
     losses = []
@@ -82,13 +67,9 @@ def adam(X, y, lam, alpha, beta1, beta2, eps, n_iter):
         w -= alpha * m_hat / (np.sqrt(v_hat) + eps)
         losses.append(logistic_ridge_loss(w, X, y, lam))
     return w, losses
-
-# ==============================
-# 4. Méthodes proximales L1
-# ==============================
+# 4. Méthodes proximales L1 (ISTA & FISTA)
 def soft_thresholding(v, lam):
     return np.sign(v) * np.maximum(np.abs(v) - lam, 0)
-
 def ista(X, y, lam, alpha, n_iter):
     w = np.zeros(X.shape[1])
     losses = []
@@ -96,7 +77,6 @@ def ista(X, y, lam, alpha, n_iter):
         w = soft_thresholding(w - alpha * logistic_gradient(w, X, y), alpha * lam)
         losses.append(logistic_loss(w, X, y) + lam * np.linalg.norm(w, 1))
     return w, losses
-
 def fista(X, y, lam, alpha, n_iter):
     w = np.zeros(X.shape[1])
     z = w.copy()
@@ -109,20 +89,14 @@ def fista(X, y, lam, alpha, n_iter):
         w, t = w_new, t_new
         losses.append(logistic_loss(w, X, y) + lam * np.linalg.norm(w, 1))
     return w, losses
-
-# ==============================
 # 5. Exécutions
-# ==============================
 w_gd, loss_gd = gradient_descent(X, y, 0.1, 0.1, 200)
 w_sgd, loss_sgd = sgd(X, y, 0.1, 0.5, 2000)
 w_rms, loss_rms = rmsprop(X, y, 0.1, 0.01, 0.9, 1e-8, 500)
 w_adam, loss_adam = adam(X, y, 0.1, 0.05, 0.9, 0.999, 1e-8, 500)
 w_ista, loss_ista = ista(X, y, 0.05, 0.1, 300)
 w_fista, loss_fista = fista(X, y, 0.05, 0.1, 300)
-
-# ==============================
 # 6. Courbes de convergence
-# ==============================
 plt.figure()
 plt.plot(loss_gd, label="GD")
 plt.plot(loss_sgd, label="SGD")
@@ -141,4 +115,23 @@ plt.legend()
 plt.xlabel("Itérations")
 plt.ylabel("Fonction objectif")
 plt.title("Méthodes proximales L1")
+plt.show()
+# 7. Analyse de la sparsité en fonction de λ
+lambdas = np.logspace(-3, 0, 10)
+zeros_ista = []
+zeros_fista = []
+for lam in lambdas:
+    w_i, _ = ista(X, y, lam, alpha=0.1, n_iter=300)
+    w_f, _ = fista(X, y, lam, alpha=0.1, n_iter=300)
+    zeros_ista.append(np.sum(np.abs(w_i) < 1e-4))
+    zeros_fista.append(np.sum(np.abs(w_f) < 1e-4))
+
+plt.figure()
+plt.semilogx(lambdas, zeros_ista, marker="o", label="ISTA")
+plt.semilogx(lambdas, zeros_fista, marker="s", label="FISTA")
+plt.xlabel("λ (régularisation L1)")
+plt.ylabel("Nombre de coefficients nuls")
+plt.title("Sparsité de w* en fonction de λ")
+plt.legend()
+plt.grid(True)
 plt.show()
